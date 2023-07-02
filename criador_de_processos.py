@@ -1,54 +1,43 @@
-import socket
+import random
+import string
+import threading
 import time
+import socket
 
-COORDINATOR_HOST = 'localhost'
-COORDINATOR_PORT = 12345
-SEPARATOR = '|'
-MESSAGE_SIZE = 10
+class Processo(threading.Thread):
+    def __init__(self, id, host='localhost', port=12345):
+        threading.Thread.__init__(self)
+        self.id = id
+        self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.client.connect((host, port))
 
-def send_message_to_coordinator(message):
-    # Cria um socket TCP/IP
-    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    def run(self):
+        self.request()
+        self.regiao_critica()
+        self.release()
 
-    # Conecta ao endereço e porta do coordenador
-    client_socket.connect((COORDINATOR_HOST, COORDINATOR_PORT))
+    def request(self):
+        mensagem = self._criar_mensagem('1')
+        self.client.send(mensagem.encode('utf-8'))
 
-    try:
-        # Envia a mensagem para o coordenador
-        client_socket.sendall(message.encode())
+    def regiao_critica(self):
+        print('Processo', self.id, 'esperando GRANT')
+        resposta = self.client.recv(1024).decode('utf-8')  # Espera pela resposta do coordenador
+        if resposta == 'GRANT':
+            print('Processo', self.id, 'recebeu GRANT')
+            print('Processo', self.id, 'entrou na região crítica')
+            time.sleep(3)
+            print('Processo', self.id, 'saiu da região crítica')
 
-    finally:
-        # Fecha o socket do cliente
-        client_socket.close()
+    def release(self):
+        mensagem = self._criar_mensagem('3')
+        self.client.send(mensagem.encode('utf-8'))
 
-def pad_message(message):
-    # Preenche a mensagem com zeros para garantir o tamanho fixo
-    return message.ljust(MESSAGE_SIZE, '0')
+    def _criar_mensagem(self, codigo):
+        return f'{codigo}|{self.id}|' + ''.join(['0' for _ in range(10 - len(codigo) - len(str(self.id)) - 2)])
 
-def create_request_message(process_id):
-    # Cria uma mensagem de REQUEST com o código 1 e o identificador do processo
-    message = f'1{SEPARATOR}{process_id}{SEPARATOR}'
-    message = pad_message(message)
-
-    # Envia a mensagem para o coordenador
-    send_message_to_coordinator(message)
-
-def create_release_message(process_id):
-    # Cria uma mensagem de RELEASE com o código 3 e o identificador do processo
-    message = f'3{SEPARATOR}{process_id}{SEPARATOR}'
-    message = pad_message(message)
-
-    # Envia a mensagem para o coordenador
-    send_message_to_coordinator(message)
-
-# Exemplo de utilização
-
-# Inicia o processo criador
-PROCESS_ID = '1000'
-create_request_message(PROCESS_ID)
-time.sleep(5)  # Simula um tempo de execução dentro da região crítica
-create_release_message(PROCESS_ID)
-PROCESS_ID = '2000'
-create_request_message(PROCESS_ID)
-time.sleep(5)  # Simula um tempo de execução dentro da região crítica
-create_release_message(PROCESS_ID)
+if __name__ == '__main__':
+    processo1 = Processo(10)
+    processo2 = Processo(20)
+    processo1.start()
+    processo2.start()

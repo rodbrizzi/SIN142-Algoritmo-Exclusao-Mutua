@@ -1,64 +1,68 @@
 import socket
 import threading
-from collections import deque
-import time
+from queue import Queue
+import signal
+import sys
 
-COORDINATOR_HOST = 'localhost'
-COORDINATOR_PORT = 12345
-SEPARATOR = '|'
-MESSAGE_SIZE = 10
+class Coordenador:
+    def __init__(self, host='localhost', port=12345):
+        self.fila = Queue()
+        self.lock = threading.Lock()
+        self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server.bind((host, port))
+        self.server.listen(5)
+        print('Coordenador ouvindo em', host, port)
 
-message_queue = deque()  # Fila FIFO para armazenar as mensagens
+        # Define um tratador para o sinal SIGINT (Ctrl+C)
+        signal.signal(signal.SIGINT, self.signal_handler)
 
-def handle_connection(client_socket, client_address):
-    try:
-        print(f"Conexão estabelecida com {client_address}")
+        self.process_thread = threading.Thread(target=self.process_requests)
+        self.process_thread.start()
 
-        # Recebe a mensagem do processo
-        message = client_socket.recv(MESSAGE_SIZE).decode()
+    def process_requests(self):
+        while True:
+            client, addr = self.server.accept()
+            print('Conexão de', addr)
+            threading.Thread(target=self.handle_client, args=(client,)).start()
 
-        # Enfileira a mensagem
-        message_queue.append(message)
+    def handle_client(self, client):
+        while True:
+            mensagem = client.recv(1024).decode('utf-8')
+            if not mensagem:
+                break
+            print('Mensagem recebida:', mensagem)
+            if mensagem.startswith('1'):  # REQUEST
+                self.request(client)
+            elif mensagem.startswith('3'):  # RELEASE
+                self.release()
+                self.grant()
+        client.close()
 
-    finally:
-        # Fecha o socket do cliente
-        client_socket.close()
+    def request(self, client):
+        with self.lock:
+            if self.fila.empty():
+                print('GRANT enviado')
+                client.send('GRANT'.encode('utf-8'))
+            self.fila.put(client)
 
-def process_message_queue():
-    while True:
-        if message_queue:
-            # Processa a mensagem mais antiga da fila
-            message = message_queue.popleft()
+    def grant(self):
+        with self.lock:
+            if not self.fila.empty():
+                next_process = self.fila.queue[0]
+                print('GRANT enviado')
+                next_process.send('GRANT'.encode('utf-8'))
 
-            # Imprime a mensagem
-            print("Mensagem recebida:", message)
-        else:
-            # Aguarda um curto período de tempo se a fila estiver vazia
-            time.sleep(0.1)
+    def release(self):
+        with self.lock:
+            if not self.fila.empty():
+                self.fila.get()
+                print('RELEASE recebido')
 
-def start_coordinator():
-    # Cria um socket TCP/IP
-    coordinator_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    def signal_handler(self, sig, frame):
+        print('Programa finalizado. Fechando o servidor...')
+        self.server.close()
+        sys.exit(0)
 
-    # Vincula o socket à porta e endereço do coordenador
-    coordinator_socket.bind((COORDINATOR_HOST, COORDINATOR_PORT))
-
-    # Coloca o socket em modo de escuta
-    coordinator_socket.listen(1)
-
-    print("Coordenador iniciado. Aguardando conexões...")
-
-    # Inicia a thread para processar a fila de mensagens
-    processing_thread = threading.Thread(target=process_message_queue)
-    processing_thread.start()
-
-    while True:
-        # Aguarda uma conexão
-        client_socket, client_address = coordinator_socket.accept()
-
-        # Cria uma nova thread para tratar a conexão
-        connection_thread = threading.Thread(target=handle_connection, args=(client_socket, client_address))
-        connection_thread.start()
-
-# Inicia o processo coordenador
-start_coordinator()
+if __name__ == '__main__':
+    coordenador = Coordenador()
+    coordenador.process_thread.join()
