@@ -51,10 +51,10 @@ class Processo(threading.Thread):
         return f'{codigo}|{self.pid}|' + ''.join(['0' for _ in range(10 - len(codigo) - len(str(self.pid)) - 2)])
 
 if __name__ == '__main__':
-    num_processos = 100  # Número de processos a serem criados
+    num_processos = 128 # Número de processos a serem criados
 
     processos = []
-    for _ in range(num_processos):
+    for i in range(num_processos):
         processo = Processo()
         processos.append(processo)
         processo.start()
