@@ -55,7 +55,7 @@ class Processo(threading.Thread):
 
 if __name__ == '__main__':
     num_processos = 10  # Número de processos a serem criados
-    r = 3  # número de vezes que cada processo executará a região crítica
+    r = 10  # número de vezes que cada processo executará a região crítica
     k = 1  # tempo de espera em segundos após escrever no arquivo
 
     processos = []
