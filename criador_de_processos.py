@@ -54,9 +54,9 @@ class Processo(threading.Thread):
         return f'{codigo}|{self.pid}|' + ''.join(['0' for _ in range(10 - len(codigo) - len(str(self.pid)) - 2)])
 
 if __name__ == '__main__':
-    num_processos = 128  # Número de processos a serem criados
-    r = 1000  # número de vezes que cada processo executará a região crítica
-    k = 0  # tempo de espera em segundos após escrever no arquivo
+    num_processos = 10  # Número de processos a serem criados
+    r = 3  # número de vezes que cada processo executará a região crítica
+    k = 1  # tempo de espera em segundos após escrever no arquivo
 
     processos = []
     for _ in range(num_processos):
