@@ -49,7 +49,7 @@ class Coordenador:
         with self.lock:
             if self.fila.empty():
                 self.update_grants_enviados(process_id)
-                client.send('GRANT'.encode('utf-8'))
+                client.send(self._criar_mensagem('2', process_id).encode('utf-8'))
             self.fila.put((client, process_id))
 
     def grant(self):
@@ -58,7 +58,7 @@ class Coordenador:
                 next_process = self.fila.queue[0]
                 next_process_socket = next_process[0]
                 next_process_pid = next_process[1]
-                next_process_socket.send('GRANT'.encode('utf-8'))
+                next_process_socket.send(self._criar_mensagem('2', next_process_pid).encode('utf-8'))
                 self.update_grants_enviados(next_process_pid)
 
     def release(self):
@@ -71,6 +71,9 @@ class Coordenador:
             self.grants_enviados[pid] += 1
         else:
             self.grants_enviados[pid] = 1
+
+    def _criar_mensagem(self, codigo, pid):
+        return f'{codigo}|{pid}|' + ''.join(['0' for _ in range(10 - len(codigo) - len(str(pid)) - 2)])
 
     def signal_handler(self, sig, frame):
         self.is_running = False
@@ -98,13 +101,14 @@ class Coordenador:
     def print_current_queue(self):
         with self.lock:
             print("Fila de Pedidos:")
+            print("PID    | POSIÇÃO")
             for i, item in enumerate(self.fila.queue):
                 pid = item[1]
-                print(f"Posição: {i}, PID: {pid}")
+                print(f"{pid} | {i+1}º")
 
     def print_grants_count(self):
         with self.lock:
-            print("PID    | GRANTS RECEBIDOS")
+            print("PID    | QUANTIDADE DE GRANTS")
             for pid, count in self.grants_enviados.items():
                 print(f"{pid} | {count}")
 
