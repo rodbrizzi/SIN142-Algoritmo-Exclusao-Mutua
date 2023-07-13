@@ -1,26 +1,30 @@
 import os
+import signal
 import socket
+import sys
 import threading
 from queue import Queue
-import signal
-import sys
 
 class Coordenador:
     def __init__(self, host='localhost', port=12345):
-        self.fila = Queue()
+        """Inicialização dos atributos do objeto."""
+        # Gerenciamento de thread
+        self.is_running = True
         self.lock = threading.Lock()
+
+        # Configuração do servidor
         self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server.bind((host, port))
         self.server.listen(5)
-        
         signal.signal(signal.SIGINT, self.signal_handler)
 
-        self.process_thread = threading.Thread(target=self.process_requests)
-        self.is_running = True
-        self.process_thread.start()
-
+        # Gerenciamento de fila
+        self.fila = Queue()
         self.grants_enviados = {}
 
+        # Inicia threads de processamento e interface
+        self.process_thread = threading.Thread(target=self.process_requests)
+        self.process_thread.start()
         self.interface_thread = threading.Thread(target=self.run_interface)
         self.interface_thread.start()
 
@@ -37,10 +41,10 @@ class Coordenador:
             mensagem = client.recv(1024).decode('utf-8')
             if not mensagem:
                 break
-            if mensagem.startswith('1|'):  # REQUEST
+            if mensagem.startswith('1|'):  # RECEBE REQUEST
                 process_id = mensagem.split('|')[1]
                 self.request(client, process_id)
-            elif mensagem.startswith('3'):  # RELEASE
+            elif mensagem.startswith('3'):  # RECEBE RELEASE
                 self.release()
                 self.grant()
         client.close()
@@ -49,7 +53,7 @@ class Coordenador:
         with self.lock:
             if self.fila.empty():
                 self.update_grants_enviados(process_id)
-                client.send(self._criar_mensagem('2', process_id).encode('utf-8'))
+                client.send(self._criar_mensagem('2', process_id).encode('utf-8')) #ENVIA GRANT
             self.fila.put((client, process_id))
 
     def grant(self):
@@ -58,7 +62,7 @@ class Coordenador:
                 next_process = self.fila.queue[0]
                 next_process_socket = next_process[0]
                 next_process_pid = next_process[1]
-                next_process_socket.send(self._criar_mensagem('2', next_process_pid).encode('utf-8'))
+                next_process_socket.send(self._criar_mensagem('2', next_process_pid).encode('utf-8')) #ENVIA GRANT
                 self.update_grants_enviados(next_process_pid)
 
     def release(self):
@@ -117,7 +121,11 @@ class Coordenador:
         self.server.close()
         print("Programa finalizado.")
 
-if __name__ == '__main__':
+def main():
+    """Função principal que inicia o coordenador e aguarda as threads terminarem."""
     coordenador = Coordenador()
     coordenador.process_thread.join()
     coordenador.interface_thread.join()
+
+if __name__ == '__main__':
+    main()
